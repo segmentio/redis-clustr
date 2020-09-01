@@ -1,5 +1,5 @@
 {
-  "name": "redis-clustr",
+  "name": "@segment/redis-clustr",
   "version": "1.7.0",
   "description": "Redis cluster client",
   "main": "src/RedisClustr.js",
