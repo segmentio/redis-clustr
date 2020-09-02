@@ -1,6 +1,6 @@
 # redis-clustr
 
-> This fork of redis-clustr updates the node_redis dependency to 3.0.0
+> This fork of redis-clustr updates the `cluster-key-slot`, `denque` and `redis` dependencies
 
 ```
 npm i @segment/redis-clustr
@@ -13,6 +13,7 @@ $ ./test/setup-redis
 $ ./test/start-redis
 $ npm install
 $ npm run test
+$ npm run benchmark
 $ ./test/stop-redis
 ```
 
@@ -25,7 +26,7 @@ This module is a relatively thin wrapper around the node redis client to enable 
 
 
 ```javascript
-var RedisClustr = require('redis-clustr');
+var RedisClustr = require('@segment/redis-clustr');
 
 var redis = new RedisClustr({
   servers: [
@@ -48,7 +49,7 @@ Servers in the cluster will be automatically connected to (via the response of `
 By default, clients will be created using `Redis.createClient(port, host)`. This can be overridden by providing a function which *must* return a [node_redis](https://github.com/mranney/node_redis) client. Clients are cached so only one connection will be made to each server.
 
 ```javascript
-var RedisClustr = require('redis-clustr');
+var RedisClustr = require('@segment/redis-clustr');
 var RedisClient = require('redis');
 var redis = new RedisClustr({
   servers: [...],
@@ -62,7 +63,7 @@ var redis = new RedisClustr({
 ### Options
 
 ```javascript
-var RedisClustr = require('redis-clustr');
+var RedisClustr = require('@segment/redis-clustr');
 var redis = new RedisClustr({
   servers: [...],
   slotInterval: 1000, // default: none. Interval to repeatedly re-fetch cluster slot configuration
@@ -101,7 +102,7 @@ Multi-key commands are also supported and will be split into individual commands
 Pub/Sub is fully supported. When subscribe is used, a new client will be created (connected to a random node). This client is shared for all subscriptions.
 
 ```javascript
-var RedisClustr = require('redis-clustr');
+var RedisClustr = require('@segment/redis-clustr');
 var redis = new RedisClustr({...});
 
 redis.on('message', function(channel, message) { /* ... */ });
