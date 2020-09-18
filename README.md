@@ -1,6 +1,6 @@
 # redis-clustr
 
-> This fork of redis-clustr updates the `cluster-key-slot`, `denque` and `redis` dependencies
+> This fork of redis-clustr updates the `cluster-key-slot`, `denque` and `redis` dependencies and includes a few bug fixes.
 
 ```
 npm i @segment/redis-clustr
