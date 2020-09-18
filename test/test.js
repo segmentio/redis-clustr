@@ -42,6 +42,20 @@ describe('RedisClustr', function() {
         r.quit(done);
       });
     });
+
+    it('queues requests', function(done) {
+      var r = new RedisClustr({
+        servers: hosts,
+        // This test should still pass despite connecting to a slave first and
+        // being configured to never send commands to slaves.
+        slaves: 'never'
+      });
+
+      r.ping(function(e) {
+        if (e) throw e
+        else r.quit(done)
+      })
+    });
   });
 
   describe('disconnecting', function() {

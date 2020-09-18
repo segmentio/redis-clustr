@@ -176,12 +176,18 @@ RedisClustr.prototype.getSlots = function(cb) {
   if (cb) q.push(cb);
 
   var runCbs = function(err, slots) {
+    if (!self._slotQ) return
+
     var cb;
     while ((cb = self._slotQ.shift())) {
       cb(err, slots);
     }
     self._slotQ = false;
   };
+
+  self.once('fullReady', function() {
+    runCbs(null, self.slots)
+  })
 
   var exclude = [];
   var tryErrors = null;
@@ -261,8 +267,6 @@ RedisClustr.prototype.getSlots = function(cb) {
           });
         }
       }
-
-      runCbs(null, self.slots);
     });
   };
 
