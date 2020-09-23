@@ -202,6 +202,10 @@ RedisClustr.prototype.getSlots = function(cb) {
     }
 
     client.cluster('slots', function(err, slots) {
+      if (!err && slots.length === 0) {
+        err = new Error('no slots found, cluster is not in ok state yet')
+      }
+
       if (err) {
         // exclude this client from then next attempt
         exclude.push(client.address);
