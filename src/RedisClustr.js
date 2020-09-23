@@ -185,14 +185,9 @@ RedisClustr.prototype.getSlots = function(cb) {
     self._slotQ = false;
   };
 
-  self.once('fullReady', function() {
-    runCbs(null, self.slots)
-  })
-
   var exclude = [];
   var tryErrors = null;
   var tryClient = function() {
-    if (typeof readyTimeout !== 'undefined') clearTimeout(readyTimeout);
     if (self.quitting) return runCbs(new Error('cluster is quitting'));
 
     var client = self.getRandomConnection(exclude, true);
@@ -203,6 +198,10 @@ RedisClustr.prototype.getSlots = function(cb) {
     }
 
     client.cluster('slots', function(err, slots) {
+      if (!err && slots.length === 0) {
+        err = new Error('no slots found, cluster is not in ok state yet')
+      }
+
       if (err) {
         // exclude this client from then next attempt
         exclude.push(client.address);
@@ -213,26 +212,8 @@ RedisClustr.prototype.getSlots = function(cb) {
 
       if (self.quitting) return runCbs(new Error('cluster is quitting'));
 
-      var seenClients = [];
-      self.slots = [];
-
-      for (var i = 0; i < slots.length; i++) {
-        var s = slots[i];
-        var start = s[0];
-        var end = s[1];
-
-        // array of all clients, clients[0] = master, others are slaves
-        var clients = s.slice(2).map(function(c, index) {
-          var name = c[0] + ':' + c[1];
-          if (seenClients.indexOf(name) === -1) seenClients.push(name);
-
-          return self.getClient(c[1], c[0], index === 0);
-        });
-
-        for (var j = start; j <= end; j++) {
-          self.slots[j] = clients;
-        }
-      }
+      const [slotMap, seenClients] = self._buildSlotMap(slots)
+      self.slots = slotMap
 
       // quit now-unused clients
       for (var i in self.connections) {
@@ -248,30 +229,82 @@ RedisClustr.prototype.getSlots = function(cb) {
         self.emit('ready');
       }
 
-      if (!self.fullReady) {
-        var ready = 0;
-        for (var i = 0; i < seenClients.length; i++) {
-          var c = self.connections[seenClients[i]];
-          if (c.ready) {
-            if (++ready === seenClients.length) {
-              self.fullReady = true;
-              self.emit('fullReady');
-            }
-            continue;
-          }
-          c.once('ready', function() {
-            if (++ready === seenClients.length) {
-              self.fullReady = true;
-              self.emit('fullReady');
-            }
-          });
-        }
+      if (self.fullReady) {
+        runCbs(null, self.slots);
+      } else {
+        self._waitUntilAllReady(seenClients, function() {
+          self.fullReady = true;
+          self.emit('fullReady');
+          runCbs(null, self.slots);
+        })
       }
     });
   };
 
   self.waitFor('connect', self.connected, tryClient);
 };
+
+/**
+ * Given a raw CLUSTER SLOTS response, return a tuple with an array that maps
+ * all slots to the client that owns it and a list of all seen clients
+ * (host:port string).
+ * @date   2020-09-23
+ * @param  {array}  slots  Raw CLUSTER SLOTS response from Redis.
+ * @return {array}         Tuple of slot clients array and seen clients array.
+ */
+RedisClustr.prototype._buildSlotMap = function(slots) {
+  const self = this;
+
+  const slotList = [];
+  const seenClients = new Set();
+
+  for (var i = 0; i < slots.length; i++) {
+    var s = slots[i];
+    var start = s[0];
+    var end = s[1];
+
+    // array of all clients, clients[0] = master, others are slaves
+    var clients = s.slice(2).map(function(c, index) {
+      var name = c[0] + ':' + c[1];
+      seenClients.add(name);
+
+      return self.getClient(c[1], c[0], index === 0);
+    });
+
+    for (var j = start; j <= end; j++) {
+      slotList[j] = clients;
+    }
+  }
+
+  return [slotList, Array.from(seenClients)]
+}
+
+/**
+ * Call the given callback when all of the given Redis connections have reached
+ * the 'ready' state.
+ * @date   2020-09-23
+ * @param  {array}     clients  Clients to wait for, as "host:port" strings.
+ * @param  {function}  cb       Callback to call when all given clients are
+ *                              ready.
+ */
+RedisClustr.prototype._waitUntilAllReady = function(clients, cb) {
+  const self = this;
+
+  var ready = 0;
+
+  for (var i = 0; i < clients.length; i++) {
+    var c = self.connections[clients[i]];
+
+    if (c.ready) {
+      if (++ready === clients.length) cb();
+      continue;
+    }
+
+    c.once('ready', function() {
+      if (++ready === clients.length) cb();
+    });
+  }
+}
 
 /**
  * Select a Redis client for the given key and conf
