@@ -185,10 +185,6 @@ RedisClustr.prototype.getSlots = function(cb) {
     self._slotQ = false;
   };
 
-  self.once('fullReady', function() {
-    runCbs(null, self.slots)
-  })
-
   var exclude = [];
   var tryErrors = null;
   var tryClient = function() {
@@ -233,10 +229,13 @@ RedisClustr.prototype.getSlots = function(cb) {
         self.emit('ready');
       }
 
-      if (!self.fullReady) {
+      if (self.fullReady) {
+        runCbs(null, self.slots);
+      } else {
         self._waitUntilAllReady(seenClients, function() {
           self.fullReady = true;
           self.emit('fullReady');
+          runCbs(null, self.slots);
         })
       }
     });
