@@ -192,7 +192,6 @@ RedisClustr.prototype.getSlots = function(cb) {
   var exclude = [];
   var tryErrors = null;
   var tryClient = function() {
-    if (typeof readyTimeout !== 'undefined') clearTimeout(readyTimeout);
     if (self.quitting) return runCbs(new Error('cluster is quitting'));
 
     var client = self.getRandomConnection(exclude, true);
