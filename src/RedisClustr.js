@@ -234,23 +234,10 @@ RedisClustr.prototype.getSlots = function(cb) {
       }
 
       if (!self.fullReady) {
-        var ready = 0;
-        for (var i = 0; i < seenClients.length; i++) {
-          var c = self.connections[seenClients[i]];
-          if (c.ready) {
-            if (++ready === seenClients.length) {
-              self.fullReady = true;
-              self.emit('fullReady');
-            }
-            continue;
-          }
-          c.once('ready', function() {
-            if (++ready === seenClients.length) {
-              self.fullReady = true;
-              self.emit('fullReady');
-            }
-          });
-        }
+        self._waitUntilAllReady(seenClients, function() {
+          self.fullReady = true;
+          self.emit('fullReady');
+        })
       }
     });
   };
@@ -291,6 +278,33 @@ RedisClustr.prototype._buildSlotMap = function(slots) {
   }
 
   return [slotList, Array.from(seenClients)]
+}
+
+/**
+ * Call the given callback when all of the given Redis connections have reached
+ * the 'ready' state.
+ * @date   2020-09-23
+ * @param  {array}     clients  Clients to wait for, as "host:port" strings.
+ * @param  {function}  cb       Callback to call when all given clients are
+ *                              ready.
+ */
+RedisClustr.prototype._waitUntilAllReady = function(clients, cb) {
+  const self = this;
+
+  var ready = 0;
+
+  for (var i = 0; i < clients.length; i++) {
+    var c = self.connections[clients[i]];
+
+    if (c.ready) {
+      if (++ready === clients.length) cb();
+      continue;
+    }
+
+    c.once('ready', function() {
+      if (++ready === clients.length) cb();
+    });
+  }
 }
 
 /**
