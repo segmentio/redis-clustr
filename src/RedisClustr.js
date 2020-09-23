@@ -212,26 +212,8 @@ RedisClustr.prototype.getSlots = function(cb) {
 
       if (self.quitting) return runCbs(new Error('cluster is quitting'));
 
-      var seenClients = [];
-      self.slots = [];
-
-      for (var i = 0; i < slots.length; i++) {
-        var s = slots[i];
-        var start = s[0];
-        var end = s[1];
-
-        // array of all clients, clients[0] = master, others are slaves
-        var clients = s.slice(2).map(function(c, index) {
-          var name = c[0] + ':' + c[1];
-          if (seenClients.indexOf(name) === -1) seenClients.push(name);
-
-          return self.getClient(c[1], c[0], index === 0);
-        });
-
-        for (var j = start; j <= end; j++) {
-          self.slots[j] = clients;
-        }
-      }
+      const [slotMap, seenClients] = self._buildSlotMap(slots)
+      self.slots = slotMap
 
       // quit now-unused clients
       for (var i in self.connections) {
@@ -271,6 +253,41 @@ RedisClustr.prototype.getSlots = function(cb) {
 
   self.waitFor('connect', self.connected, tryClient);
 };
+
+/**
+ * Given a raw CLUSTER SLOTS response, return a tuple with an array that maps
+ * all slots to the client that owns it and a list of all seen clients
+ * (host:port string).
+ * @date   2020-09-23
+ * @param  {array}  slots  Raw CLUSTER SLOTS response from Redis.
+ * @return {array}         Tuple of slot clients array and seen clients array.
+ */
+RedisClustr.prototype._buildSlotMap = function(slots) {
+  const self = this;
+
+  const slotList = [];
+  const seenClients = new Set();
+
+  for (var i = 0; i < slots.length; i++) {
+    var s = slots[i];
+    var start = s[0];
+    var end = s[1];
+
+    // array of all clients, clients[0] = master, others are slaves
+    var clients = s.slice(2).map(function(c, index) {
+      var name = c[0] + ':' + c[1];
+      seenClients.add(name);
+
+      return self.getClient(c[1], c[0], index === 0);
+    });
+
+    for (var j = start; j <= end; j++) {
+      slotList[j] = clients;
+    }
+  }
+
+  return [slotList, Array.from(seenClients)]
+}
 
 /**
  * Select a Redis client for the given key and conf
